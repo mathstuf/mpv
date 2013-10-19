@@ -113,6 +113,7 @@ typedef struct MPOpts {
     int loop_times;
     int loop_file;
     int shuffle;
+    int nested_chapters;
     int ordered_chapters;
     char *ordered_chapters_files;
     int chapter_merge_threshold;

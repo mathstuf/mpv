@@ -472,6 +472,7 @@ const m_option_t mp_opts[] = {
     OPT_FLAG("save-position-on-quit", position_save_on_quit, 0),
     OPT_FLAG("write-filename-in-watch-later-config", write_filename_in_watch_later_config, 0),
 
+    OPT_FLAG("nested-chapters", nested_chapters, 0),
     OPT_FLAG("ordered-chapters", ordered_chapters, 0),
     OPT_STRING("ordered-chapters-files", ordered_chapters_files, 0),
     OPT_INTRANGE("chapter-merge-threshold", chapter_merge_threshold, 0, 0, 10000),
@@ -579,6 +580,7 @@ const struct MPOpts mp_default_opts = {
 #endif
     .auto_load_scripts = 1,
     .loop_times = -1,
+    .nested_chapters = 0,
     .ordered_chapters = 1,
     .chapter_merge_threshold = 100,
     .chapter_seek_threshold = 5.0,
