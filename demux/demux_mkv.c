@@ -738,6 +738,79 @@ static void read_deferred_cues(demuxer_t *demuxer)
     }
 }
 
+static void demux_mkv_iterate_chapters(struct demuxer *demuxer,
+                                       struct ebml_chapter_atom *chapters,
+                                       int chapter_count,
+                                       int edition_idx,
+                                       int selected_edition,
+                                       struct matroska_chapter *ordered_chapters)
+{
+    int warn_level = edition_idx == selected_edition ? MSGL_WARN : MSGL_V;
+    for (int i = 0; i < chapter_count; i++) {
+        struct ebml_chapter_atom *ca = chapters + i;
+        struct matroska_chapter chapter = { };
+        struct bstr name = { "(unnamed)", 9 };
+
+        if (!ca->n_chapter_time_start)
+            MP_MSG(demuxer, warn_level, "Chapter lacks start time\n");
+        chapter.start = ca->chapter_time_start;
+        chapter.end = ca->chapter_time_end;
+
+        if (ca->n_chapter_display) {
+            if (ca->n_chapter_display > 1)
+                MP_MSG(demuxer, warn_level, "Multiple chapter "
+                       "names not supported, picking first\n");
+            if (!ca->chapter_display[0].n_chap_string)
+                MP_MSG(demuxer, warn_level, "Malformed chapter name entry\n");
+            else
+                name = ca->chapter_display[0].chap_string;
+        }
+
+        if (ca->n_chapter_segment_uid) {
+            chapter.has_segment_uid = true;
+            int len = ca->chapter_segment_uid.len;
+            if (len != sizeof(chapter.uid.segment))
+                MP_MSG(demuxer, warn_level,
+                       "Chapter segment uid bad length %d\n", len);
+            else {
+                memcpy(chapter.uid.segment, ca->chapter_segment_uid.start,
+                       len);
+                if (ca->n_chapter_segment_edition_uid)
+                    chapter.uid.edition = ca->chapter_segment_edition_uid;
+                else
+                    chapter.uid.edition = 0;
+                MP_VERBOSE(demuxer, "Chapter segment uid ");
+                for (int n = 0; n < len; n++)
+                    MP_VERBOSE(demuxer, "%02x ",
+                           chapter.uid.segment[n]);
+                MP_VERBOSE(demuxer, "\n");
+            }
+        }
+
+        MP_VERBOSE(demuxer, "Chapter %u from %02d:%02d:%02d.%03d "
+               "to %02d:%02d:%02d.%03d, %.*s\n", i,
+               (int) (chapter.start / 60 / 60 / 1000000000),
+               (int) ((chapter.start / 60 / 1000000000) % 60),
+               (int) ((chapter.start / 1000000000) % 60),
+               (int) (chapter.start % 1000000000),
+               (int) (chapter.end / 60 / 60 / 1000000000),
+               (int) ((chapter.end / 60 / 1000000000) % 60),
+               (int) ((chapter.end / 1000000000) % 60),
+               (int) (chapter.end % 1000000000),
+               BSTR_P(name));
+
+        if (edition_idx == selected_edition){
+            demuxer_add_chapter(demuxer, name, chapter.start, chapter.end,
+                                ca->chapter_uid);
+            if (ordered_chapters) {
+                chapter.name = talloc_strndup(ordered_chapters, name.start,
+                                              name.len);
+                ordered_chapters[i] = chapter;
+            }
+        }
+    }
+}
+
 static int demux_mkv_read_chapters(struct demuxer *demuxer)
 {
     struct MPOpts *opts = demuxer->opts;
@@ -796,7 +869,6 @@ static int demux_mkv_read_chapters(struct demuxer *demuxer)
 
     for (int idx = 0; idx < num_editions; idx++) {
         MP_VERBOSE(demuxer, "New edition %d\n", idx);
-        int warn_level = idx == selected_edition ? MSGL_WARN : MSGL_V;
         if (editions[idx].n_edition_flag_default)
             MP_VERBOSE(demuxer, "Default edition flag: %"PRIu64
                        "\n", editions[idx].edition_flag_default);
@@ -813,68 +885,8 @@ static int demux_mkv_read_chapters(struct demuxer *demuxer)
             demuxer->matroska_data.num_ordered_chapters = chapter_count;
         }
 
-        for (int i = 0; i < chapter_count; i++) {
-            struct ebml_chapter_atom *ca = editions[idx].chapter_atom + i;
-            struct matroska_chapter chapter = {0};
-            struct bstr name = { "(unnamed)", 9 };
-
-            if (!ca->n_chapter_time_start)
-                MP_MSG(demuxer, warn_level, "Chapter lacks start time\n");
-            chapter.start = ca->chapter_time_start;
-            chapter.end = ca->chapter_time_end;
-
-            if (ca->n_chapter_display) {
-                if (ca->n_chapter_display > 1)
-                    MP_MSG(demuxer, warn_level, "Multiple chapter "
-                           "names not supported, picking first\n");
-                if (!ca->chapter_display[0].n_chap_string)
-                    MP_MSG(demuxer, warn_level, "Malformed chapter name entry\n");
-                else
-                    name = ca->chapter_display[0].chap_string;
-            }
-
-            if (ca->n_chapter_segment_uid) {
-                chapter.has_segment_uid = true;
-                int len = ca->chapter_segment_uid.len;
-                if (len != sizeof(chapter.uid.segment))
-                    MP_MSG(demuxer, warn_level,
-                           "Chapter segment uid bad length %d\n", len);
-                else {
-                    memcpy(chapter.uid.segment, ca->chapter_segment_uid.start,
-                           len);
-                    if (ca->n_chapter_segment_edition_uid)
-                        chapter.uid.edition = ca->chapter_segment_edition_uid;
-                    else
-                        chapter.uid.edition = 0;
-                    MP_VERBOSE(demuxer, "Chapter segment uid ");
-                    for (int n = 0; n < len; n++)
-                        MP_VERBOSE(demuxer, "%02x ",
-                               chapter.uid.segment[n]);
-                    MP_VERBOSE(demuxer, "\n");
-                }
-            }
-
-            MP_VERBOSE(demuxer, "Chapter %u from %02d:%02d:%02d.%03d "
-                   "to %02d:%02d:%02d.%03d, %.*s\n", i,
-                   (int) (chapter.start / 60 / 60 / 1000000000),
-                   (int) ((chapter.start / 60 / 1000000000) % 60),
-                   (int) ((chapter.start / 1000000000) % 60),
-                   (int) (chapter.start % 1000000000),
-                   (int) (chapter.end / 60 / 60 / 1000000000),
-                   (int) ((chapter.end / 60 / 1000000000) % 60),
-                   (int) ((chapter.end / 1000000000) % 60),
-                   (int) (chapter.end % 1000000000),
-                   BSTR_P(name));
-
-            if (idx == selected_edition) {
-                demuxer_add_chapter(demuxer, name, chapter.start, chapter.end,
-                                    ca->chapter_uid);
-            }
-            if (m_chapters) {
-                chapter.name = talloc_strndup(m_chapters, name.start, name.len);
-                m_chapters[i] = chapter;
-            }
-        }
+        demux_mkv_iterate_chapters(demuxer, editions[idx].chapter_atom, chapter_count,
+                                   idx, selected_edition, m_chapters);
     }
 
     demuxer->num_editions = num_editions;
