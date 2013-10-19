@@ -147,6 +147,8 @@ struct matroska_data {
         bool has_segment_uid;
         struct matroska_segment_uid uid;
         char *name;
+        struct matroska_chapter *subchapters;
+        int num_subchapters;
     } *ordered_chapters;
     int num_ordered_chapters;
 };
