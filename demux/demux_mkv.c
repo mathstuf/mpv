@@ -856,6 +856,10 @@ static int demux_mkv_read_chapters(struct demuxer *demuxer)
         };
         MP_TARRAY_APPEND(demuxer, demuxer->editions, demuxer->num_editions, new);
     }
+    /* TODO: wanted_edition should skip over hidden editions since the spec
+     * states that hidden editions should be hidden for users (they are
+     * intended for Control Tracks, a defunct part of the spec related to
+     * menus. */
     if (wanted_edition >= 0 && wanted_edition < num_editions) {
         selected_edition = wanted_edition;
         MP_VERBOSE(demuxer, "User-specified edition: %d\n", selected_edition);
