@@ -799,21 +799,6 @@ static void demux_mkv_iterate_chapters(struct demuxer *demuxer,
         struct matroska_chapter chapter = {0};
         struct bstr name = { "(unnamed)", 9 };
 
-        if (ca->n_chapter_atom) {
-            struct MPOpts *opts = demuxer->opts;
-            if (opts->nested_chapters) {
-                if (ordered_chapters) {
-                    chapter.num_subchapters = ca->n_chapter_atom;
-                    chapter.subchapters = talloc_array_ptrtype(ordered_chapters,
-                            chapter.subchapters, chapter.num_subchapters);
-                }
-
-                demux_mkv_iterate_chapters(demuxer, ca->chapter_atom, ca->n_chapter_atom,
-                                           edition_idx, selected_edition, chapter.subchapters);
-                continue;
-            }
-        }
-
         if (!ca->n_chapter_time_start) {
             mp_msg(MSGT_DEMUX, warn_level,
                    "[mkv] Chapter lacks start time\n");
@@ -872,6 +857,17 @@ static void demux_mkv_iterate_chapters(struct demuxer *demuxer,
         if (edition_idx == selected_edition) {
             demuxer_add_chapter(demuxer, name, chapter.start, chapter.end,
                                 ca->chapter_uid);
+
+            if (ca->n_chapter_atom) {
+                if (ordered_chapters) {
+                    chapter.num_subchapters = ca->n_chapter_atom;
+                    chapter.subchapters = talloc_array_ptrtype(ordered_chapters,
+                            chapter.subchapters, chapter.num_subchapters);
+                }
+
+                demux_mkv_iterate_chapters(demuxer, ca->chapter_atom, ca->n_chapter_atom,
+                                           edition_idx, selected_edition, chapter.subchapters);
+            }
         }
         if (ordered_chapters) {
             chapter.name = talloc_strndup(ordered_chapters, name.start,
