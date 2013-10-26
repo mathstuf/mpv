@@ -925,6 +925,19 @@ static void transfer_playlist(struct MPContext *mpctx, struct playlist *pl)
     }
 }
 
+static void print_chapters(struct MPContext *mpctx)
+{
+    if (mpctx->chapters) {
+        int chapter_count = mpctx->num_chapters;
+        MP_VERBOSE(mpctx, "There are %d chapters.\n", chapter_count);
+        MP_VERBOSE(mpctx, "Chapters: (number, start, name):\n");
+        for (int i = 0; i < chapter_count; i++) {
+            struct chapter *c = mpctx->chapters + i;
+            MP_VERBOSE(mpctx, "%3d %9.3f %s\n", i, c->start, c->name);
+        }
+    }
+}
+
 static void print_timeline(struct MPContext *mpctx)
 {
     if (mpctx->timeline) {
@@ -1141,6 +1154,7 @@ goto_reopen_demuxer: ;
     if (mpctx->demuxer->type == DEMUXER_TYPE_CUE)
         build_cue_timeline(mpctx);
 
+    print_chapters(mpctx);
     print_timeline(mpctx);
 
     if (mpctx->timeline) {
